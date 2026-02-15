@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  @apply box-border;
+}
+
+html {
+  scroll-behavior: smooth;
+  @apply transition-colors duration-300;
+}
+
+body {
+  @apply bg-gradient-to-br from-ramadan-50 to-ramadan-100 text-gray-900;
+  @apply dark:bg-gradient-to-br dark:from-gray-950 dark:to-black dark:text-white;
+  @apply overflow-x-hidden;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2 bg-ramadan-500 text-white rounded-lg font-medium transition-all duration-200 hover:bg-ramadan-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply dark:bg-ramadan-400 dark:hover:bg-ramadan-300;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-white dark:bg-gray-900 border-2 border-ramadan-500 text-ramadan-500 dark:text-ramadan-300 rounded-lg font-medium transition-all duration-200 hover:bg-ramadan-50 dark:hover:bg-gray-800 active:scale-95;
+    @apply dark:border-ramadan-400;
+  }
+
+  .card {
+    @apply bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-4 sm:p-6 transition-all duration-200 text-gray-900 dark:text-white;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-2 border-2 border-gray-200 dark:border-gray-700 rounded-lg font-medium text-gray-900 dark:text-white bg-white dark:bg-gray-800 placeholder-gray-400 dark:placeholder-gray-400 focus:outline-none focus:border-ramadan-500 focus:ring-2 focus:ring-ramadan-200 dark:focus:ring-ramadan-900 transition-all duration-200;
+  }
+
+  .nav-toggle {
+    @apply flex items-center gap-1 p-1 rounded-2xl border border-ramadan-200 dark:border-gray-700 bg-gradient-to-r from-ramadan-50 to-white dark:from-gray-900 dark:to-gray-900 overflow-x-auto;
+    scrollbar-width: none;
+  }
+
+  .nav-toggle::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-toggle-item {
+    @apply shrink-0 px-3 sm:px-4 h-10 rounded-xl text-sm font-semibold transition-all duration-200;
+  }
+
+  .nav-toggle-item-active {
+    @apply bg-ramadan-500 dark:bg-ramadan-400 text-white dark:text-gray-950 shadow;
+  }
+
+  .nav-toggle-item-inactive {
+    @apply text-gray-700 dark:text-gray-300 hover:bg-white/90 dark:hover:bg-gray-800;
+  }
+
+  .page-shell {
+    @apply min-h-screen bg-gradient-to-br from-ramadan-50 to-ramadan-100 dark:from-gray-900 dark:to-black;
+  }
+
+  .page-container {
+    @apply max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-12;
+  }
+
+  .page-header {
+    @apply text-center mb-8 sm:mb-10 lg:mb-12;
+  }
+
+  .page-title {
+    @apply text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white;
+  }
+
+  .page-subtitle {
+    @apply mt-2 text-sm sm:text-base lg:text-lg text-gray-600 dark:text-gray-300;
+  }
+}
+
