@@ -61,12 +61,12 @@ const ProfileSetup = ({ onComplete }) => {
         {step === 1 && (
           <div className="space-y-6">
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Choose Your Emoji</h2>
-              <p className="text-gray-600 dark:text-gray-300 text-sm">This represents you on social sections</p>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Select Gender</h2>
+              <p className="text-gray-600 dark:text-gray-300 text-sm">Choose male or female for your profile</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              {GENDER_OPTIONS.map((option) => (
+              {GENDER_OPTIONS.filter((option) => option.value === 'male' || option.value === 'female').map((option) => (
                 <button
                   key={option.value}
                   onClick={() => {

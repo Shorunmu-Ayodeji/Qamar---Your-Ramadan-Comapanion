@@ -20,6 +20,11 @@ const SocialHub = ({ currentUserId, friends = [] }) => {
   );
 
   useEffect(() => {
+    if (!currentUserId) {
+      setMessages([]);
+      return () => {};
+    }
+
     if (!selectedFriendId) {
       setMessages([]);
       return () => {};
@@ -28,10 +33,18 @@ const SocialHub = ({ currentUserId, friends = [] }) => {
   }, [currentUserId, selectedFriendId]);
 
   useEffect(() => {
+    if (!currentUserId) {
+      setNotifications([]);
+      return () => {};
+    }
     return socialService.subscribeToFriendNotifications(currentUserId, setNotifications);
   }, [currentUserId]);
 
   useEffect(() => {
+    if (!currentUserId) {
+      setActivities([]);
+      return () => {};
+    }
     const visibleIds = [currentUserId, ...friends.map((friend) => friend.id)];
     return socialService.subscribeToActivityFeed(visibleIds, setActivities);
   }, [currentUserId, friends]);

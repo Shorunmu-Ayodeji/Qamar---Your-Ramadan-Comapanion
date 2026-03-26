@@ -71,6 +71,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const register = async (email: string, password: string, displayName?: string) => {
     const credential = await authService.register(email, password, displayName);
     setUser(credential.user);
+    localStorage.setItem(`profileSetupRequired_${credential.user.uid}`, 'true');
     await firestoreService.createUserProfile(
       displayName || credential.user.displayName || 'User'
     );

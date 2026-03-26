@@ -68,14 +68,33 @@ const normalizeCountryCode = (value) => {
   return null;
 };
 
+const flagCache = new Map();
+
 export const getCountryByCode = (value) => {
   const code = normalizeCountryCode(value);
   if (!code) return null;
-  const country = countryByCode.get(code);
-  if (country) {
-    return { ...country, flag: toFlagEmoji(code) };
+
+  if (flagCache.has(code)) {
+    return flagCache.get(code);
   }
-  return { code, name: code, flag: toFlagEmoji(code) };
+
+  const country = countryByCode.get(code);
+  let result;
+  if (country) {
+    result = { ...country, flag: toFlagEmoji(code) };
+  } else {
+    let name = code;
+    try {
+      const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+      name = regionNames.of(code) || code;
+    } catch (e) {
+      // Fallback to code if Intl is not supported
+    }
+    result = { code, name, flag: toFlagEmoji(code) };
+  }
+
+  flagCache.set(code, result);
+  return result;
 };
 
 export const getCountryFlag = (value) => {
@@ -94,4 +113,20 @@ export const GENDER_OPTIONS = [
 export const getGenderEmoji = (gender) => {
   const option = GENDER_OPTIONS.find((o) => o.value === gender);
   return option ? option.emoji : DEFAULT_GENDER;
+};
+
+export const searchCountries = (query) => {
+  const term = query?.toLowerCase().trim();
+  const matches = term
+    ? COUNTRIES.filter(
+        (c) =>
+          c.name.toLowerCase().includes(term) ||
+          c.code.toLowerCase().includes(term)
+      )
+    : COUNTRIES;
+
+  return matches.map((c) => ({
+    ...c,
+    flag: toFlagEmoji(c.code),
+  }));
 };

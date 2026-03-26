@@ -3,6 +3,7 @@
     "source": "functions"
   },
   "firestore": {
+    "database": "qamar",
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   }

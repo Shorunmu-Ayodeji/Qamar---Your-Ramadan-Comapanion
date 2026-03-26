@@ -1,24 +1,78 @@
 import React, { useEffect, useState } from 'react';
+import { firestoreService } from '../services/firestoreService';
 
 const StreakBadge = ({ reflections }) => {
   const [streak, setStreak] = useState(0);
   const [isNewStreak, setIsNewStreak] = useState(false);
+  const [lastCountedLabel, setLastCountedLabel] = useState('No reflection yet');
+
+  const formatLastCounted = (timestamp) => {
+    const target = new Date(timestamp);
+    if (Number.isNaN(target.getTime())) return 'Unknown';
+
+    target.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const diffDays = Math.round((today.getTime() - target.getTime()) / (24 * 60 * 60 * 1000));
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    return target.toLocaleDateString();
+  };
 
   useEffect(() => {
     if (!reflections?.length) {
       setStreak(0);
+      setLastCountedLabel('No reflection yet');
+      localStorage.setItem('streakCount', '0');
+      const existingProfile = JSON.parse(localStorage.getItem('userProfile') || '{}');
+      if (existingProfile && typeof existingProfile === 'object') {
+        localStorage.setItem(
+          'userProfile',
+          JSON.stringify({
+            ...existingProfile,
+            streak: 0,
+            totalReflections: 0,
+            updatedAt: new Date().toISOString(),
+          })
+        );
+      }
+      firestoreService.saveUserProfile({ streak: 0, totalReflections: 0 }).catch(() => {});
       return;
     }
 
-    const dates = reflections.map((r) => new Date(r.date).toDateString()).reverse();
+    const dayTimestamps = Array.from(
+      new Set(
+        reflections
+          .map((r) => new Date(r.date))
+          .filter((d) => !Number.isNaN(d.getTime()))
+          .map((d) => {
+            d.setHours(0, 0, 0, 0);
+            return d.getTime();
+          })
+      )
+    ).sort((a, b) => b - a);
+    setLastCountedLabel(formatLastCounted(dayTimestamps[0]));
+
     let currentStreak = 0;
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let expectedDay = today.getTime();
 
-    for (let i = 0; i < dates.length; i++) {
-      const checkDate = new Date(today);
-      checkDate.setDate(checkDate.getDate() - i);
-      if (dates[i] === checkDate.toDateString()) currentStreak++;
-      else break;
+    for (let i = 0; i < dayTimestamps.length; i++) {
+      const reflectionDay = dayTimestamps[i];
+
+      if (reflectionDay === expectedDay) {
+        currentStreak++;
+        expectedDay -= 24 * 60 * 60 * 1000;
+        continue;
+      }
+
+      if (reflectionDay > expectedDay) {
+        continue;
+      }
+
+      break;
     }
 
     const previousStreak = parseInt(localStorage.getItem('streakCount') || '0', 10);
@@ -29,6 +83,24 @@ const StreakBadge = ({ reflections }) => {
 
     setStreak(currentStreak);
     localStorage.setItem('streakCount', String(currentStreak));
+
+    const existingProfile = JSON.parse(localStorage.getItem('userProfile') || '{}');
+    if (existingProfile && typeof existingProfile === 'object') {
+      localStorage.setItem(
+        'userProfile',
+        JSON.stringify({
+          ...existingProfile,
+          streak: currentStreak,
+          totalReflections: reflections.length,
+          updatedAt: new Date().toISOString(),
+        })
+      );
+    }
+
+    firestoreService.saveUserProfile({
+      streak: currentStreak,
+      totalReflections: reflections.length,
+    }).catch(() => {});
   }, [reflections]);
 
   const subtitle = (() => {
@@ -49,6 +121,7 @@ const StreakBadge = ({ reflections }) => {
         {streak}
       </div>
       <div className="text-gray-600 dark:text-gray-300 text-sm mt-2">{subtitle}</div>
+      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Last counted: {lastCountedLabel}</div>
     </div>
   );
 };

@@ -94,59 +94,89 @@ const TogetherOnboarding = ({ onComplete }) => {
 
 const TogetherPage = () => {
   const { user } = useAuth();
-  const [friends, setFriends] = useState([]);
+  const [friendships, setFriendships] = useState([]);
   const [userId, setUserId] = useState('');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [friendIdInput, setFriendIdInput] = useState('');
   const [friendNameInput, setFriendNameInput] = useState('');
   const [copyStatus, setCopyStatus] = useState('');
-  const friendsStorageKey = user?.uid ? `togetherFriends_${user.uid}` : 'togetherFriends';
+  const [requestStatus, setRequestStatus] = useState('');
+  const [userName, setUserName] = useState('');
 
   useEffect(() => {
     setUserId(user?.uid || '');
+    const profile = JSON.parse(localStorage.getItem('userProfile') || '{}');
+    setUserName(profile?.name || user?.displayName || 'User');
 
     const onboardingSeen = localStorage.getItem('togetherOnboardingSeen');
     if (!onboardingSeen) {
       setShowOnboarding(true);
     }
+  }, [user?.uid, user?.displayName]);
 
-    const savedFriends = JSON.parse(localStorage.getItem(friendsStorageKey) || '[]');
-    setFriends(savedFriends);
-  }, [user?.uid, friendsStorageKey]);
+  useEffect(() => {
+    if (!userId) return () => {};
+    return socialService.subscribeToFriendships(userId, setFriendships);
+  }, [userId]);
 
-  const handleAddFriend = (friendId, friendName = 'Friend') => {
-    if (!friendId || friends.some((friend) => friend.id === friendId)) {
-      return;
+  const acceptedFriends = friendships
+    .filter((item) => item.status === 'accepted')
+    .map((item) => {
+      const otherId = item.users.find((id) => id !== userId) || '';
+      const otherName =
+        item.requesterId === userId
+          ? (item.recipientName || otherId)
+          : (item.requesterName || otherId);
+      return {
+        id: otherId,
+        name: otherName,
+        addedDate: item.updatedAt?.toDate ? item.updatedAt.toDate().toISOString() : new Date().toISOString(),
+      };
+    });
+
+  const pendingSent = friendships.filter((item) => item.status === 'pending' && item.requesterId === userId);
+  const pendingReceived = friendships.filter((item) => item.status === 'pending' && item.requesterId !== userId);
+
+  const handleSendFriendRequest = async (friendId, friendName = '') => {
+    if (!friendId || !userId || friendId === userId) return;
+    setRequestStatus('');
+    try {
+      await socialService.sendFriendRequest(userId, friendId, userName, friendName);
+      socialService.sendFriendNotification(
+        friendId,
+        userId,
+        'friend_request',
+        `${userName} sent you a friend request`
+      ).catch(() => {});
+      socialService.recordActivity(userId, 'friend_request', `Sent friend request to ${friendName || friendId}`).catch(() => {});
+      setRequestStatus('Friend request sent.');
+    } catch (error) {
+      setRequestStatus(error?.message || 'Could not send friend request.');
     }
-
-    const newFriend = {
-      id: friendId,
-      name: friendName,
-      emoji: ['Friend', 'Buddy', 'Pal'][Math.floor(Math.random() * 3)],
-      addedDate: new Date().toISOString(),
-    };
-
-    const updatedFriends = [...friends, newFriend];
-    setFriends(updatedFriends);
-    localStorage.setItem(friendsStorageKey, JSON.stringify(updatedFriends));
-
-    socialService.sendFriendNotification(
-      friendId,
-      userId,
-      'friend_request',
-      `${newFriend.name || 'A friend'} connected with you on Qamar`
-    ).catch(() => {});
-    socialService.recordActivity(
-      userId,
-      'friend_added',
-      `Connected with ${newFriend.name || 'a friend'}`
-    ).catch(() => {});
   };
 
-  const handleRemoveFriend = (friendId) => {
-    const updatedFriends = friends.filter((f) => f.id !== friendId);
-    setFriends(updatedFriends);
-    localStorage.setItem(friendsStorageKey, JSON.stringify(updatedFriends));
+  const handleAcceptRequest = async (otherUserId) => {
+    try {
+      await socialService.acceptFriendRequest(userId, otherUserId);
+      await socialService.sendFriendNotification(
+        otherUserId,
+        userId,
+        'friend_accept',
+        `${userName} accepted your friend request`
+      );
+      await socialService.recordActivity(userId, 'friend_accept', `Accepted friend request from ${otherUserId}`);
+    } catch (error) {
+      setRequestStatus('Could not accept request.');
+    }
+  };
+
+  const handleDeclineRequest = async (otherUserId) => {
+    try {
+      await socialService.declineFriendRequest(userId, otherUserId);
+      await socialService.recordActivity(userId, 'friend_decline', `Declined friend request from ${otherUserId}`);
+    } catch (error) {
+      setRequestStatus('Could not decline request.');
+    }
   };
 
   const handleOnboardingComplete = () => {
@@ -222,38 +252,71 @@ const TogetherPage = () => {
               <button
                 className="btn-primary w-full"
                 onClick={() => {
-                  handleAddFriend(friendIdInput.trim(), friendNameInput.trim() || 'Friend');
+                  handleSendFriendRequest(friendIdInput.trim(), friendNameInput.trim());
                   setFriendIdInput('');
                   setFriendNameInput('');
                 }}
                 disabled={!friendIdInput.trim()}
               >
-                Add Friend
+                Send Friend Request
               </button>
+              {requestStatus && <p className="text-xs text-gray-600 dark:text-gray-300">{requestStatus}</p>}
             </div>
 
-            {friends.length > 0 && (
+            {pendingReceived.length > 0 && (
+              <div className="mt-6 card space-y-3">
+                <h3 className="font-semibold text-gray-900 dark:text-white">Friend Requests</h3>
+                <div className="space-y-2">
+                  {pendingReceived.map((item) => {
+                    const otherId = item.users.find((id) => id !== userId) || '';
+                    const requesterName = item.requesterName || otherId;
+                    return (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm text-gray-900 dark:text-white truncate">{requesterName}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{otherId}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => handleAcceptRequest(otherId)} className="btn-primary text-xs px-2 py-1">Accept</button>
+                        <button onClick={() => handleDeclineRequest(otherId)} className="btn-secondary text-xs px-2 py-1">Decline</button>
+                      </div>
+                    </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {pendingSent.length > 0 && (
+              <div className="mt-6 card space-y-3">
+                <h3 className="font-semibold text-gray-900 dark:text-white">Sent Requests</h3>
+                <div className="space-y-2">
+                  {pendingSent.map((item) => {
+                    const otherId = item.users.find((id) => id !== userId) || '';
+                    const recipientName = item.recipientName || otherId;
+                    return (
+                      <div key={item.id} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <p className="font-medium text-sm text-gray-900 dark:text-white truncate">{recipientName}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{otherId}</p>
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Pending approval</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {acceptedFriends.length > 0 && (
               <div className="mt-6 card space-y-3">
                 <h3 className="font-semibold text-gray-900 dark:text-white">Connected Friends</h3>
                 <div className="space-y-2">
-                  {friends.map((friend) => (
-                    <div
-                      key={friend.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold">{friend.emoji}</span>
-                        <span className="font-medium text-sm text-gray-900 dark:text-white">
-                          {friend.name}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => handleRemoveFriend(friend.id)}
-                        className="text-red-500 hover:text-red-700 text-sm"
-                        aria-label={`Remove ${friend.name}`}
-                      >
-                        X
-                      </button>
+                  {acceptedFriends.map((friend) => (
+                    <div key={friend.id} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <p className="font-medium text-sm text-gray-900 dark:text-white truncate">{friend.name}</p>
+                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">Approved</p>
                     </div>
                   ))}
                 </div>
@@ -262,10 +325,10 @@ const TogetherPage = () => {
           </div>
 
           <div className="lg:col-span-2 space-y-8">
-            <SharedStreak userId={userId} friends={friends} />
-            <Leaderboard friends={friends} />
-            <SocialHub currentUserId={userId} friends={friends} />
-            <SocialAchievements friends={friends} />
+            <SharedStreak userId={userId} friends={acceptedFriends} />
+            <Leaderboard friends={acceptedFriends} />
+            <SocialHub currentUserId={userId} friends={acceptedFriends} />
+            <SocialAchievements friends={acceptedFriends} />
           </div>
         </div>
 

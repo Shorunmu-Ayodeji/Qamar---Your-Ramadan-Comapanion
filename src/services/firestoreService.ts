@@ -8,6 +8,8 @@ import {
   deleteDoc,
   query,
   where,
+  orderBy,
+  limit,
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore';
@@ -37,6 +39,18 @@ export interface UserProfile {
   updatedAt: Timestamp;
 }
 
+export interface PublicLeaderboardProfile {
+  userId: string;
+  name?: string;
+  displayName?: string;
+  gender?: 'male' | 'female' | 'other' | 'prefer-not';
+  country?: string;
+  streak: number;
+  totalReflections: number;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
 export interface SocialComment {
   id: string;
   reflectionId: string;
@@ -55,6 +69,23 @@ export interface SocialReaction {
 }
 
 export const firestoreService = {
+  syncPublicLeaderboardProfile: async (data: Partial<PublicLeaderboardProfile>): Promise<void> => {
+    const user = auth.currentUser;
+    if (!user) throw new Error('User not authenticated');
+
+    await setDoc(doc(db, 'publicLeaderboard', user.uid), {
+      userId: user.uid,
+      name: data.name || data.displayName || user.displayName || 'User',
+      displayName: data.displayName || data.name || user.displayName || 'User',
+      gender: data.gender || '',
+      country: data.country || '',
+      streak: data.streak ?? 0,
+      totalReflections: data.totalReflections ?? 0,
+      updatedAt: serverTimestamp(),
+      createdAt: data.createdAt || serverTimestamp(),
+    }, { merge: true });
+  },
+
   // User Profile Methods
   createUserProfile: async (displayName: string): Promise<void> => {
     const user = auth.currentUser;
@@ -70,6 +101,13 @@ export const firestoreService = {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }, { merge: true });
+
+    await firestoreService.syncPublicLeaderboardProfile({
+      displayName,
+      name: displayName,
+      streak: 0,
+      totalReflections: 0,
+    });
   },
 
   saveUserProfile: async (data: Partial<UserProfile>): Promise<void> => {
@@ -84,6 +122,16 @@ export const firestoreService = {
       updatedAt: serverTimestamp(),
       createdAt: data.createdAt || serverTimestamp(),
     }, { merge: true });
+
+    await firestoreService.syncPublicLeaderboardProfile({
+      name: data.name,
+      displayName: data.displayName,
+      gender: data.gender,
+      country: data.country,
+      streak: data.streak ?? 0,
+      totalReflections: data.totalReflections ?? 0,
+      createdAt: data.createdAt as any,
+    });
   },
 
   getUserProfile: async (userId?: string): Promise<UserProfile | null> => {
@@ -98,6 +146,16 @@ export const firestoreService = {
     await updateDoc(doc(db, 'users', userId), {
       ...data,
       updatedAt: serverTimestamp(),
+    });
+
+    await firestoreService.syncPublicLeaderboardProfile({
+      name: data.name,
+      displayName: data.displayName,
+      gender: data.gender,
+      country: data.country,
+      streak: data.streak,
+      totalReflections: data.totalReflections,
+      createdAt: data.createdAt as any,
     });
   },
 
@@ -223,6 +281,43 @@ export const firestoreService = {
 
   removeReaction: async (reactionId: string): Promise<void> => {
     await deleteDoc(doc(db, 'reactions', reactionId));
+  },
+
+  getGlobalLeaderboard: async (maxEntries = 100): Promise<PublicLeaderboardProfile[]> => {
+    const normalizeRows = (docs: any[]) =>
+      docs
+        .map((item) => ({ ...item.data(), id: item.id } as any))
+        .sort((a, b) => {
+          if ((b.streak || 0) !== (a.streak || 0)) return (b.streak || 0) - (a.streak || 0);
+          return (b.totalReflections || 0) - (a.totalReflections || 0);
+        })
+        .slice(0, maxEntries)
+        .map((item) => ({
+          userId: item.userId || item.id,
+          name: item.name,
+          displayName: item.displayName,
+          gender: item.gender,
+          country: item.country,
+          streak: item.streak || 0,
+          totalReflections: item.totalReflections || 0,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+        }));
+
+    try {
+      const q = query(
+        collection(db, 'publicLeaderboard'),
+        orderBy('streak', 'desc'),
+        limit(maxEntries)
+      );
+      const querySnapshot = await getDocs(q);
+      return normalizeRows(querySnapshot.docs as any[]);
+    } catch (error: any) {
+      // Fallback to unordered fetch + client-side sort if ordered query fails.
+      console.warn('Ordered global leaderboard query failed, using fallback', error?.code || error?.message || error);
+      const fallbackSnapshot = await getDocs(collection(db, 'publicLeaderboard'));
+      return normalizeRows(fallbackSnapshot.docs as any[]);
+    }
   },
 };
 
